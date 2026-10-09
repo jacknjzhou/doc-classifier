@@ -40,7 +40,8 @@ class MaterialDetector(Protocol):
 
 @dataclass
 class ExtractContext:
-    """抽取上下文。`rules` 用字符串注解避免 config ↔ base 循环导入。"""
+    """抽取上下文。`rules`/`dimension` 用字符串注解避免 config ↔ base 循环导入。"""
 
     rules: "RulesConfig"  # noqa: F821  (doc_classifier.config.RulesConfig)
+    dimension: "DimensionSpec | None" = None  # noqa: F821  当前维度规格（labels 等，配置驱动）
     degraded: bool = False  # True = 无分节全文检测（材料检测置信度降档）
