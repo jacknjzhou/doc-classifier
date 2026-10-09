@@ -142,6 +142,59 @@ class ItemExtractor:
         ]
 
 
+class DepartmentExtractor:
+    """部门：标签邻接 0.9（部门/所在部门/发文单位/发文部门）+ 组织后缀模式 0.7。
+
+    后缀命中串需含词表项或整体以后缀结尾；包含关系去重（"请财务部" 吞并 "财务部" 时保留短者）。
+    """
+
+    name = "department"
+
+    _SUFFIX = re.compile(r"([\u4e00-\u9fff]{2,8}?(?:部|中心|科|组|处|办公室|委员会))")
+    _DEFAULT_LABELS = ["部门", "所在部门", "发文单位", "发文部门"]
+    _HONORIFICS = ("部", "中心", "科", "组", "处", "办公室", "委员会")
+
+    def extract(
+        self,
+        doc: RecognizedDoc,
+        field: str,
+        ctx: ExtractContext,
+    ) -> list[Candidate]:
+        best: dict[str, tuple[float, tuple[int, int]]] = {}
+
+        def add(value: str, conf: float, span: tuple[int, int]) -> None:
+            if value not in best or conf > best[value][0]:
+                best[value] = (conf, span)
+
+        labels = (
+            ctx.dimension.labels
+            if (ctx.dimension is not None and ctx.dimension.labels)
+            else self._DEFAULT_LABELS
+        )
+        for label in labels:
+            for m in re.finditer(re.escape(label) + r"[：:]\s*([\u4e00-\u9fff]{2,12})", doc.text):
+                add(m.group(1), 0.9, (m.start(1), m.end(1)))
+
+        for m in self._SUFFIX.finditer(doc.text):
+            v = m.group(1)
+            valid = any(w in v for w in _DEPARTMENTS) or v.endswith(self._HONORIFICS)
+            if not valid:
+                continue  # 防"部分/部门感"类误报
+            add(v, 0.7, (m.start(1), m.end(1)))
+
+        # 包含关系去重："财务部" ⊂ "请财务部" → 丢弃长串（同置信度下短者为真名概率更高）
+        values = list(best)
+        for v in values:
+            if any(o != v and o in v for o in values):
+                best.pop(v)
+
+        return [
+            Candidate(value=v, field=field, confidence=conf, source="rule", span=span)
+            for v, (conf, span) in best.items()
+        ]
+
+
 register_extractor("party_a", PartyAExtractor())
 register_extractor("person", PersonExtractor())
 register_extractor("item", ItemExtractor())
+register_extractor("department", DepartmentExtractor())
