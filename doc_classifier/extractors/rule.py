@@ -102,5 +102,46 @@ class PersonExtractor:
         ]
 
 
+class ItemExtractor:
+    """物品：标签邻接 0.9（品名/货物名称/物料）+ 数量×单位模式 0.7。"""
+
+    name = "item"
+
+    _UNIT_A = re.compile(r"([\u4e00-\u9fffA-Za-z0-9]{2,20}?)\s*\d{1,4}\s*(?:台|套|件|个|箱|盒)")
+    _UNIT_B = re.compile(r"(?<!\d)\d{1,4}\s*(?:台|套|件|个|箱|盒)\s*([\u4e00-\u9fffA-Za-z0-9]{2,20})")
+    _DEFAULT_LABELS = ["品名", "货物名称", "物料"]
+
+    def extract(
+        self,
+        doc: RecognizedDoc,
+        field: str,
+        ctx: ExtractContext,
+    ) -> list[Candidate]:
+        best: dict[str, tuple[float, tuple[int, int]]] = {}
+
+        def add(value: str, conf: float, span: tuple[int, int]) -> None:
+            if value and value not in best or (value in best and conf > best[value][0]):
+                best[value] = (conf, span)
+
+        labels = (
+            ctx.dimension.labels
+            if (ctx.dimension is not None and ctx.dimension.labels)
+            else self._DEFAULT_LABELS
+        )
+        for label in labels:
+            for m in re.finditer(re.escape(label) + r"[：:]\s*" + _VALUE, doc.text):
+                add(m.group(1), 0.9, (m.start(1), m.end(1)))
+
+        for pat in (self._UNIT_A, self._UNIT_B):
+            for m in pat.finditer(doc.text):
+                add(m.group(1), 0.7, (m.start(1), m.end(1)))
+
+        return [
+            Candidate(value=v, field=field, confidence=conf, source="rule", span=span)
+            for v, (conf, span) in best.items()
+        ]
+
+
 register_extractor("party_a", PartyAExtractor())
 register_extractor("person", PersonExtractor())
+register_extractor("item", ItemExtractor())
