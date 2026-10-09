@@ -65,11 +65,17 @@ class LLMConfig(BaseModel):
     max_retries: int = 2
 
 
+class UnknownPolicy(BaseModel):
+    status: str = "review"  # 无法分类的去向（v1 固定 review，不猜）
+    dimension: str = "none"  # 预留：按维度兜底策略
+
+
 class RulesConfig(BaseModel):
     version: str
     llm: LLMConfig = Field(default_factory=LLMConfig)
     dimensions: dict[str, DimensionSpec]
     document_types: dict[str, DocTypeSpec]
+    unknown_policy: UnknownPolicy = Field(default_factory=UnknownPolicy)
 
     @model_validator(mode="after")
     def _cross_validate(self) -> "RulesConfig":
