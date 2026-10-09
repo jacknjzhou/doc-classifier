@@ -1,5 +1,4 @@
 import json
-from pathlib import Path
 
 import pytest
 
@@ -7,30 +6,13 @@ from doc_classifier.extractors.llm import LLMExtractor
 from doc_classifier.models import RecognizedDoc, Section
 from doc_classifier.pipeline import classify_doc, classify_docs
 from tests.fakes import FakeClient
+from tests.util import FIX, _load
 
-FIX = Path(__file__).parent / "fixtures"
 BUSINESS = {
     "contract": (["合同", "阿里巴巴（中国）有限公司"], "classified"),
     "resume": (["简历", "张三"], "classified"),
     "purchase_order": (["采购单", "笔记本电脑"], "classified"),
 }
-
-
-def _load(path: str) -> RecognizedDoc:
-    d = json.loads(Path(path).read_text(encoding="utf-8"))
-    raw = d.get("sections") or None
-    sections = (
-        [Section(index=s.get("index", i), text=s.get("text", ""), title=s.get("title")) for i, s in enumerate(raw)]
-        if raw
-        else None
-    )
-    return RecognizedDoc(
-        doc_id=d.get("doc_id", ""),
-        text=d.get("text", ""),
-        sections=sections,
-        structured=d.get("structured"),
-        source=d.get("source", ""),
-    )
 
 
 @pytest.mark.parametrize("name,args", BUSINESS.items())
