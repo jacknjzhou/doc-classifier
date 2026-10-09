@@ -64,7 +64,7 @@ def test_path_with_subtype(rules):
     st = SubtypeResult(
         option="hospitality",
         display="业务招待费报销",
-        hits={"invoice": MaterialHit(material="invoice", section=0, confidence=0.8, keyword="发票")},
+        hits={"invoice": MaterialHit(material="invoice", display="发票", section=0, confidence=0.8, keyword="发票")},
     )
     cands = {
         "person_name": [_cand("person_name", "张三", 0.9)],
