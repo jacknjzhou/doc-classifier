@@ -5,7 +5,7 @@ from doc_classifier.models import RecognizedDoc, Section
 def test_keyword_score(rules):
     doc = RecognizedDoc(doc_id="c", text="双方签订合同 甲方：A 乙方：B 合同金额为十万元")
     res = detect_doc_type(doc, rules)
-    assert res.name == "合同" and res.status == "classified"
+    assert res.name == "contract" and res.status == "classified"
 
 
 def test_title_boost(rules):
@@ -14,13 +14,13 @@ def test_title_boost(rules):
         sections=[Section(title="Q4 营销方案评审会议纪要", text="Q4 营销方案评审会议纪要 议题：Q4 营销方案评审")],
     )
     res = detect_doc_type(doc, rules)
-    assert res.name == "会议纪要" and res.status == "classified"
+    assert res.name == "meeting_minutes" and res.status == "classified"
 
 
 def test_distinct_keywords(rules):
     doc = RecognizedDoc(doc_id="po", text="采购单：笔记本电脑 供应商：A 甲方：B")
     res = detect_doc_type(doc, rules)
-    assert res.name == "采购单" and res.status == "classified"
+    assert res.name == "purchase_order" and res.status == "classified"
 
 
 def test_no_section_uses_first_section(rules):
@@ -32,7 +32,7 @@ def test_no_section_uses_first_section(rules):
         ],
     )
     res = detect_doc_type(doc, rules)
-    assert res.name == "报销单" and res.status == "classified"
+    assert res.name == "reimbursement" and res.status == "classified"
 
 
 def test_tie_review(rules):

@@ -19,10 +19,14 @@ class Section:
 @dataclass
 class RecognizedDoc:
     doc_id: str
-    text: str  # 全文（各分节拼接）
+    text: str = ""  # 全文（各分节拼接）；缺省时由 sections 自动拼接
     sections: list[Section] | None = None  # 页/分节结构；None = 无分节信息，按全文处理
     structured: dict[str, Any] | None = None
     source: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.text and self.sections:  # 由分节自动拼接全文
+            self.text = "\n".join(s.text for s in self.sections)
 
 
 @dataclass
