@@ -1,0 +1,21 @@
+[project]
+name = "doc-classifier"
+version = "0.1.0"
+description = "维度涌现式文档分类引擎（规则优先 + LLM 兜底 + 配置驱动维度）"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2",
+    "PyYAML",
+    "openai",
+    "pytest",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["doc_classifier*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
