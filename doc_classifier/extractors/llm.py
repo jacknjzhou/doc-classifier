@@ -135,7 +135,8 @@ class LLMExtractor:
         for attempt in range(max_retries + 1):
             try:
                 self.calls += 1
-                content = client.chat(messages)
+                res = client.chat(messages)
+                content = getattr(res, "content", res)  # 兼容 str 与 .content 对象两种客户端形态
                 raw = json.loads(content)
                 if not isinstance(raw, dict):
                     raise ValueError("LLM 输出不是 JSON 对象")
