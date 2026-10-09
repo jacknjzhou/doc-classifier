@@ -32,6 +32,7 @@ class MaterialSpec(BaseModel):
     display: str
     keywords: list[str]
     detector: str | None = None  # 自定义检测器注册名；默认 "keyword"
+    name: str = ""  # 材料名（= yaml 键；load 时回填，供检测器使用）
 
 
 class SubtypeOption(BaseModel):
@@ -82,6 +83,7 @@ class RulesConfig(BaseModel):
             if st is None:
                 continue
             for mname, mat in st.materials.items():
+                mat.name = mname  # 回填材料名（yaml 键）供检测器使用
                 if not mat.keywords:
                     raise ValueError(
                         f"document_types.{key}.subtypes.materials.{mname}: keywords must be non-empty"
