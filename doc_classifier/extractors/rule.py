@@ -172,7 +172,8 @@ class DepartmentExtractor:
             else self._DEFAULT_LABELS
         )
         for label in labels:
-            for m in re.finditer(re.escape(label) + r"[：:]\s*([\u4e00-\u9fff]{2,12})", doc.text):
+            # 标签左边界：不得被更长中文词包含（"各部门" 不得命中 "部门"）
+            for m in re.finditer(r"(?<![\u4e00-\u9fff])" + re.escape(label) + r"[：:]\s*([\u4e00-\u9fff]{2,12})", doc.text):
                 add(m.group(1), 0.9, (m.start(1), m.end(1)))
 
         for m in self._SUFFIX.finditer(doc.text):

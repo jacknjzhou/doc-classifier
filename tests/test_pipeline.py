@@ -40,6 +40,27 @@ def test_business_case(name, args, rules):
     c = classify_doc(doc, rules, llm=None)
     assert c.category_path == path and c.status == status
 
+
+OFFICE = {
+    "meeting_minutes": (["会议纪要", "Q4营销方案评审", "市场部"], "classified"),
+    "reimbursement": (["报销"], "review"),  # 单页表单材料不全 → 子类型判不出 → review（design 4.3）
+    "leave_request": (["请假单", "李四"], "classified"),
+    "invoice": (["发票", "XX信息技术有限公司"], "classified"),
+    "notice": (["通知公告", "人力资源部"], "classified"),
+    "weekly_report": (["周报/工作总结", "王五"], "classified"),
+    "policy": (["规章制度", "行政部"], "classified"),
+    "certificate": (["证明材料", "赵文杰"], "classified"),
+    "personnel_record": (["人事档案", "张三"], "classified"),
+}
+
+
+@pytest.mark.parametrize("name,args", OFFICE.items())
+def test_office_case(name, args, rules):
+    path, status = args
+    doc = _load(str(FIX / f"{name}.json"))
+    c = classify_doc(doc, rules, llm=None)
+    assert c.category_path == path and c.status == status, f"{name}: {c}"
+
 CONTRACT = RecognizedDoc(
     doc_id="c1",
     text="技术服务合同 甲方：阿里巴巴（中国）有限公司 乙方：某软件公司 签订日期：2024-01-01",
