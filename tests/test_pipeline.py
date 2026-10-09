@@ -43,6 +43,38 @@ def test_office_case(name, args, rules):
     c = classify_doc(doc, rules, llm=None)
     assert c.category_path == path and c.status == status, f"{name}: {c}"
 
+
+def test_travel_package(rules):
+    c = classify_doc(_load(str(FIX / "reimburse_travel.json")), rules, llm=None)
+    assert c.subtype == "travel_expense" and c.status == "classified"
+    assert c.category_path == ["报销", "差旅费报销", "张三"]
+
+
+def test_hospitality_package(rules):
+    c = classify_doc(_load(str(FIX / "reimburse_hospitality.json")), rules, llm=None)
+    assert c.subtype == "hospitality" and c.category_path == ["报销", "业务招待费报销", "张三"]
+
+
+def test_office_package(rules):
+    c = classify_doc(_load(str(FIX / "reimburse_office.json")), rules, llm=None)
+    assert c.subtype == "office_supplies" and c.category_path == ["报销", "办公用品报销", "张三"]
+
+
+def test_incomplete_package_review(rules):  # 成功标准 #5：required 缺失 → review 不误判
+    c = classify_doc(_load(str(FIX / "reimburse_incomplete.json")), rules, llm=None)
+    assert c.status == "review" and c.subtype is None and c.category_path == ["报销"]
+
+
+def test_nosection_degraded(rules):  # 审查重点 #4
+    c = classify_doc(_load(str(FIX / "reimburse_nosection.json")), rules, llm=None)
+    assert c.subtype == "travel_expense"
+    assert any(e.source == "material" for e in c.evidence)
+
+
+def test_non_subtype_doc_unchanged(rules):  # v1.1 行为回归（design 4.6）
+    c = classify_doc(_load(str(FIX / "contract.json")), rules, llm=None)
+    assert c.subtype is None and c.category_path == ["合同", "阿里巴巴（中国）有限公司"]
+
 CONTRACT = RecognizedDoc(
     doc_id="c1",
     text="技术服务合同 甲方：阿里巴巴（中国）有限公司 乙方：某软件公司 签订日期：2024-01-01",

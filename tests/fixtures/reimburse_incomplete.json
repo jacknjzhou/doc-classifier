@@ -1,0 +1,9 @@
+{
+  "doc_id": "rb-incomplete-001",
+  "text": "",
+  "sections": [
+    {"index": 0, "text": "报销单\n报销人：张三\n审批：已通过"},
+    {"index": 1, "text": "餐费单\n餐饮\n800元"}
+  ],
+  "source": "scan://rb/incomplete-001"
+}

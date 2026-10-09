@@ -107,6 +107,9 @@ def classify(
             result.subtype = subtype_res.option
             result.category_path.insert(1, subtype_res.display)
             result.materials = [m for m, hit in subtype_res.hits.items() if hit.confidence > 0]
+        for m, hit in subtype_res.hits.items():  # 材料命中也是证据（可追溯）
+            if hit.confidence > 0:
+                result.evidence.append(Evidence(source="material", value=hit.keyword, span=None, confidence=hit.confidence))
     else:
         result.confidence = max((c.confidence for cs in candidates.values() for c in cs), default=0.0)
         if failed:  # review 时保留最高候选信息供复核展示（不进路径）
