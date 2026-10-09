@@ -1,8 +1,11 @@
-"""⑤ 分类决策（design 4.3 钉死规则）：
+"""⑤ 分类决策（design 4.3 钉死规则 1-6）：
 
-- 每个维度：best = 最高置信候选；best < threshold → 未通过；并列最高 → 不猜；无候选 → 缺席。
-- 最终状态：doc_type 未定 → unknown；主维度未通过（低于/并列/缺席）→ review；
-  任一次维度低于阈值或并列 → review（缺席次维度不影响）；子类型层启用而 ①c 无命中/并列 → review。
+- 输入 candidates 已按 (field, 归一化值) 分组（pipeline ④ 合并）；
+- 每维度：best=组内最高 conf；best < threshold → 未通过；多组同分最高 → 并列（不猜）；
+- 主维度 = **通过的维度中 priority 最小者**；
+- 最终 status：完全无候选 → unknown；有候选但无维度通过 → review；
+  任一有候选的维度低于阈值/并列 → review；否则 classified。
+- 子类型层启用而 ①c 无命中/并列 → review（即使维度通过）。
 - category_path = [doc_type.display] + [subtype.display?命中] + [各通过维度**原始**值, priority 升序]；
   review → [doc_type.display]；unknown → []。category_key = 主维度归一化值。
 """
@@ -10,7 +13,14 @@
 from __future__ import annotations
 
 from .config import DimensionRef, RulesConfig
-from .models import Candidate, Classification, DocTypeResult, RecognizedDoc, SubtypeResult
+from .models import (
+    Candidate,
+    Classification,
+    DocTypeResult,
+    Evidence,
+    RecognizedDoc,
+    SubtypeResult,
+)
 from .normalizers import normalize
 
 _TOLERANCE = 1e-9
@@ -19,7 +29,8 @@ _TOLERANCE = 1e-9
 PASS, BELOW, TIE, ABSENT = "pass", "below", "tie", "absent"
 
 
-def _dim_state(field: str, cands: list[Candidate], threshold: float) -> tuple[str, Candidate | None]:
+def _dim_state(cands: list[Candidate], threshold: float) -> tuple[str, Candidate | None]:
+    """cands = 已合并的组代表（每组一个，value 为组内原始值代表）。"""
     if not cands:
         return ABSENT, None
     best = max(cands, key=lambda c: c.confidence)
@@ -42,10 +53,16 @@ def classify(
     dt_spec = rules.document_types.get(doc_type_res.name) if doc_type_res.name else None
     if dt_spec is None:
         # ① 未判定（unknown）或 ① 层面 review（doc_type 并列，name=None）
-        status = doc_type_res.status if doc_type_res.status in ("review", "unknown") else "review"
-        result.status = status
+        result.status = doc_type_res.status if doc_type_res.status in ("review", "unknown") else "review"
         result.doc_type = doc_type_res.name
-        result.category_path = []
+        if result.status == "review" and doc_type_res.matched:
+            # 配置顺序首个并列候选供展示（rules.yaml 口径）
+            max_s = max(doc_type_res.matched.values())
+            first = next(
+                (n for n, s in doc_type_res.matched.items() if abs(s - max_s) < _TOLERANCE), None
+            )
+            if first and first in rules.document_types:
+                result.category_path = [rules.document_types[first].display]
         result.confidence = doc_type_res.confidence
         return result
 
@@ -57,56 +74,50 @@ def classify(
     states: dict[str, tuple[str, Candidate | None]] = {}
     for ref in dims:
         dim = rules.dimensions[ref.use]
-        states[ref.use] = _dim_state(ref.use, candidates.get(ref.use, []), dim.threshold)
+        states[ref.use] = _dim_state(candidates.get(ref.use, []), dim.threshold)
 
-    primary = dims[0].use if dims else None
-    primary_state = states.get(primary, (ABSENT, None)) if primary else (ABSENT, None)
-
-    # 子类型层：启用而未命中（无候选/并列）→ 整篇 review（design 4.3 钉死）
+    any_cands = any(states[f][1] is not None for f in states)
+    passed = [d.use for d in dims if states[d.use][0] == PASS]
+    failed = [d.use for d in dims if states[d.use][0] in (BELOW, TIE)]
     subtype_blocked = dt_spec.subtypes is not None and subtype_res.option is None
 
-    if primary_state[0] in (BELOW, TIE, ABSENT) or subtype_blocked:
-        result.status = "review"
-        result.confidence = max((c.confidence for cs in candidates.values() for c in cs), default=0.0)
-        result.category_path = [first_display]
-    elif any(states[d.use][0] in (BELOW, TIE) for d in dims[1:]):
-        result.status = "review"
-        result.confidence = max((c.confidence for cs in candidates.values() for c in cs), default=0.0)
-        result.category_path = [first_display]
+    if not any_cands:
+        result.status = "unknown"  # design 钉死 6：完全无候选 → unknown
+    elif not passed or failed or subtype_blocked:
+        result.status = "review"  # 有候选但无维度通过 / 低于阈值 / 并列 / 子类型未命中
     else:
         result.status = "classified"
 
-    # 仅 classified 才落维度值/证据（review 路径 = [doc_type.display]，design 4.3 钉死）
     if result.status == "classified":
         for ref in dims:
             field = ref.use
             state, best = states[field]
             if state == PASS and best is not None:
                 result.category_path.append(best.value)
-                result.evidence.append(_evidence(best))
-            if field == primary and best is not None and state == PASS:
-                result.dimension = field
-                result.category_display = best.value
-                result.category_key = normalize(best.value, field, rules)
-                result.confidence = max(result.confidence, best.confidence)
-        if subtype_res.option and subtype_res.display:
-            result.subtype = subtype_res.option
-            result.category_path.insert(1, subtype_res.display)
-            result.materials = [m for m, hit in subtype_res.hits.items() if hit.confidence > 0]
-    else:  # review：主维度信息保留（供复核展示），不进路径
-        if primary and states.get(primary, (None, None))[1] is not None:
+                result.evidence.append(Evidence(source=best.source, value=best.value, span=best.span, confidence=best.confidence))
+        if passed:
+            # 主维度 = 通过的维度中 priority 最小者
+            primary = min(passed, key=lambda f: next(d.priority for d in dims if d.use == f))
             best = states[primary][1]
             result.dimension = primary
             result.category_display = best.value
             result.category_key = normalize(best.value, primary, rules)
-            result.evidence.append(_evidence(best))
+            result.confidence = best.confidence
+        if subtype_res.option and subtype_res.display:
+            result.subtype = subtype_res.option
+            result.category_path.insert(1, subtype_res.display)
+            result.materials = [m for m, hit in subtype_res.hits.items() if hit.confidence > 0]
+    else:
+        result.confidence = max((c.confidence for cs in candidates.values() for c in cs), default=0.0)
+        if failed:  # review 时保留最高候选信息供复核展示（不进路径）
+            f = failed[0]
+            best = states[f][1]
+            if best is not None:
+                result.dimension = f
+                result.category_display = best.value
+                result.category_key = normalize(best.value, f, rules)
+                result.evidence.append(Evidence(source=best.source, value=best.value, span=best.span, confidence=best.confidence))
         if subtype_res.hits:
             result.materials = [m for m, hit in subtype_res.hits.items() if hit.confidence > 0]
 
     return result
-
-
-def _evidence(c: Candidate):
-    from .models import Evidence
-
-    return Evidence(source=c.source, value=c.value, span=c.span, confidence=c.confidence)
