@@ -25,6 +25,16 @@ class RecognizedDoc:
 
 
 @dataclass
+class DocTypeResult:
+    """① 文档类型判定结果。"""
+
+    name: str | None  # 命中的 doc_type name；None = 未判定
+    confidence: float
+    matched: dict[str, float]  # 各候选类型得分
+    status: str  # classified | review | unknown
+
+
+@dataclass
 class Candidate:
     value: str  # 原始命中值
     field: str  # 目标维度名（party_a_name / person_name / item_name / department_name / meeting_name / invoice_title）
