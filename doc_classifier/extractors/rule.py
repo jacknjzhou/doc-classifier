@@ -22,6 +22,7 @@ def _load_words(filename: str) -> frozenset[str]:
 
 _SURNAMES = _load_words("surnames.txt")
 _DEPARTMENTS = _load_words("departments.txt") if (_DATA_DIR / "departments.txt").exists() else frozenset()
+_DEFAULT_PERSON_LABELS = ["姓名", "报销人", "请假人", "申请人", "联系人", "作者"]
 
 _CJK_RUN = re.compile(r"[\u4e00-\u9fff]+")
 _HONORIFIC = re.compile(r"(?<![\u4e00-\u9fff])([\u4e00-\u9fff]{2,3})(?=\s?(?:先生|女士|同志|经理|老师|总监))")
@@ -75,7 +76,11 @@ class PersonExtractor:
             if value not in best or conf > best[value][0]:
                 best[value] = (conf, span)
 
-        labels = ctx.dimension.labels if ctx.dimension else []
+        labels = (
+            ctx.dimension.labels
+            if (ctx.dimension is not None and ctx.dimension.labels)
+            else _DEFAULT_PERSON_LABELS  # 内置默认（design 4.5）；rules.yaml 配置优先
+        )
         for label in labels:  # 策略 1：标签邻接
             pat = re.compile(re.escape(label) + r"[：:]\s*(?:([\u4e00-\u9fff]{2,10}))")
             for m in pat.finditer(doc.text):
