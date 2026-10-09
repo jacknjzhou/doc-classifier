@@ -35,7 +35,7 @@ _HONORIFICS = sorted(
 _TOPIC_SUFFIXES = sorted(
     [
         "会议纪要", "会议记录", "会议总结", "工作总结", "纪要", "记录",
-        "决议", "通知", "通报", "报告", "总结", "请示", "批复",
+        "决议", "通知", "通报", "报告", "总结", "请示", "批复", "讨论", "会议",
         "备忘录", "协议", "合同", "说明书", "清单", "明细", "附录", "附件", "函",
     ],
     key=len,
@@ -94,14 +94,22 @@ def normalize_item(value: str) -> str:
 
 
 def normalize_topic(value: str) -> str:
-    """标题 → 议题：循环裁尾部公文后缀。
+    """标题 → 议题：去首部"关于"、去全角标点、循环裁尾部公文后缀。
 
     短标题（<6 字）不裁，避免 "年度总结" → "年度"；长标题允许裁到 2 字
     （"季度工作总结报告" → "季度"，依赖 工作总结/报告 逐级剥离）。
+    同义标题归一："关于Q4营销方案评审的会议纪要" == "Q4营销方案评审"。
     """
     v = value.strip()
+    v = (
+        v.replace("；", ";").replace("：", ":")
+        .replace("。", ".").replace("？", "?").replace("！", "!")
+    )
+    if v.startswith("关于"):
+        v = v[len("关于") :]
+    v = v.strip()
     if len(v) < 6:
-        return v
+        return v or value
     changed = True
     while changed:
         changed = False
@@ -132,12 +140,18 @@ _NORMALIZERS = {
 }
 
 
-def normalize(value: str, dim_name: str, rules: RulesConfig) -> str:
-    """按维度配置的 normalize 名分派（未配置/未知名 = 恒等）。"""
-    dim = rules.dimensions.get(dim_name)
-    if dim is None or not dim.normalize:
-        return value
-    fn = _NORMALIZERS.get(dim.normalize)
+def normalize(value: str, key: str, rules: RulesConfig | None = None) -> str:
+    """归一化分派：key 为维度名（经 rules 解析其 normalize 策略）或直接策略名。
+
+    rules 缺省时仅接受直接策略名（org/person/item/topic/invoice_title）；
+    无法解析 = 恒等。
+    """
+    name = key
+    if rules is not None:
+        dim = rules.dimensions.get(key)
+        if dim is not None and dim.normalize:
+            name = dim.normalize
+    fn = _NORMALIZERS.get(name)
     if fn is None:
         return value
     return fn(value) or value

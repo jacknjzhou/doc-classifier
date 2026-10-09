@@ -7,6 +7,14 @@ from doc_classifier.normalizers import (
 )
 
 
+def test_normalize_topic_strip():
+    assert normalize_topic("关于Q4营销方案评审的会议纪要") == normalize_topic("Q4营销方案评审")
+
+
+def test_dispatch_topic():
+    assert normalize("关于X的会议纪要", "topic") == normalize_topic("关于X的会议纪要")
+
+
 def test_org_suffix_strip():
     assert normalize_org("阿里巴巴（中国）有限公司") == "阿里巴巴"
 

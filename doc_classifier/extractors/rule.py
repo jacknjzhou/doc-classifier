@@ -199,7 +199,52 @@ class DepartmentExtractor:
         ]
 
 
+class TopicExtractor:
+    """会议主题：标签 0.9（会议主题/议题）+ 关于…的会议纪要 0.7 + 首行回退 0.5。"""
+
+    name = "topic"
+
+    _ABOUT = re.compile(r"关于(.{2,28}?)的会议纪要")
+    _DEFAULT_LABELS = ["会议主题", "议题"]
+
+    def extract(
+        self,
+        doc: RecognizedDoc,
+        field: str,
+        ctx: ExtractContext,
+    ) -> list[Candidate]:
+        best: dict[str, tuple[float, tuple[int, int]]] = {}
+
+        def add(value: str, conf: float, span: tuple[int, int]) -> None:
+            if value not in best or conf > best[value][0]:
+                best[value] = (conf, span)
+
+        labels = (
+            ctx.dimension.labels
+            if (ctx.dimension is not None and ctx.dimension.labels)
+            else self._DEFAULT_LABELS
+        )
+        for label in labels:
+            for m in re.finditer(re.escape(label) + r"[：:]\s*([^\s。；;]{2,30})", doc.text):
+                add(m.group(1), 0.9, (m.start(1), m.end(1)))
+
+        for m in self._ABOUT.finditer(doc.text):
+            add(m.group(1), 0.7, (m.start(1), m.end(1)))
+
+        if not best:  # 回退：首行（2-30 字）
+            scope = doc.sections[0].text if doc.sections else doc.text
+            first = next((ln.strip() for ln in scope.splitlines() if ln.strip()), "")
+            if 2 <= len(first) <= 30:
+                add(first, 0.5, (scope.find(first), scope.find(first) + len(first)))
+
+        return [
+            Candidate(value=v, field=field, confidence=conf, source="rule", span=span)
+            for v, (conf, span) in best.items()
+        ]
+
+
 register_extractor("party_a", PartyAExtractor())
 register_extractor("person", PersonExtractor())
 register_extractor("item", ItemExtractor())
 register_extractor("department", DepartmentExtractor())
+register_extractor("topic", TopicExtractor())
