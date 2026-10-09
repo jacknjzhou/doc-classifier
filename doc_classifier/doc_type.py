@@ -12,7 +12,6 @@ from .models import DocTypeResult, RecognizedDoc, Section
 
 _KEYWORD_W = 1.0
 _TITLE_W = 1.0
-_MIN_SCORE = 1.0
 _TOLERANCE = 1e-9
 
 
@@ -25,7 +24,7 @@ def _scope_and_title(doc: RecognizedDoc) -> tuple[str, str]:
 
 def _score(dt: DocTypeSpec, scope: str, title: str) -> float:
     score = 0.0
-    for kw in dt.keywords:
+    for kw in dt.detect.keywords:
         if kw in scope:  # distinct：每个关键词至多计一次
             score += _KEYWORD_W
             if title and kw in title:
@@ -43,12 +42,20 @@ def detect_doc_type(doc: RecognizedDoc, rules: RulesConfig) -> DocTypeResult:
 
     max_s = max(matched.values())
     top = [n for n, s in matched.items() if abs(s - max_s) < _TOLERANCE]
-    if len(top) == 1 and max_s >= _MIN_SCORE:
+    min_score = rules.document_types[top[0]].detect.min_score if len(top) == 1 else None
+
+    if len(top) == 1 and max_s >= min_score:
         return DocTypeResult(
             name=top[0],
             confidence=min(1.0, max_s / 3.0),
             matched=matched,
             status="classified",
         )
-    # 并列（或最高分未达阈值且存在竞争）→ review，绝不猜
-    return DocTypeResult(name=None, confidence=min(1.0, max_s / 3.0), matched=matched, status="review")
+    if len(top) > 1:
+        return DocTypeResult(name=None, confidence=min(1.0, max_s / 3.0), matched=matched, status="review")
+    # 最高分未达自身 min_score：存在其他达标候选 → review；否则 unknown
+    has_valid = any(
+        s >= rules.document_types[n].detect.min_score for n, s in matched.items()
+    )
+    status = "review" if has_valid else "unknown"
+    return DocTypeResult(name=None, confidence=min(1.0, max_s / 3.0), matched=matched, status=status)

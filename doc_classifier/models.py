@@ -13,6 +13,7 @@ from typing import Any
 class Section:
     index: int  # 分节/页序号（0 起）
     text: str
+    title: str | None = None  # 页/节标题（可选）
 
 
 @dataclass
