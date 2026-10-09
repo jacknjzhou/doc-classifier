@@ -248,8 +248,48 @@ class TopicExtractor:
         ]
 
 
+class InvoiceTitleExtractor:
+    """发票抬头（购方）：标签 0.9（购方名称/购买方名称）；命中行 ±3 行内出现
+    18 位统一社会信用代码 → +0.2（上限 1.0，税号邻位校验）。不匹配裸"名称："（design R11）。
+    """
+
+    name = "invoice_title"
+
+    _TAXID = re.compile(r"[0-9A-HJ-NPQRTUWXY]{2}\d{6}[0-9A-HJ-NPQRTUWXY]{10}")
+    _DEFAULT_LABELS = ["购方名称", "购买方名称"]
+
+    def extract(
+        self,
+        doc: RecognizedDoc,
+        field: str,
+        ctx: ExtractContext,
+    ) -> list[Candidate]:
+        labels = (
+            ctx.dimension.labels
+            if (ctx.dimension is not None and ctx.dimension.labels)
+            else self._DEFAULT_LABELS
+        )
+        lines = doc.text.splitlines()
+        out: list[Candidate] = []
+        seen: set[str] = set()
+        for label in labels:  # 仅匹配明确标签，不匹配裸"名称："
+            for m in re.finditer(re.escape(label) + r"[：:]\s*([^\s。；;]{2,40})", doc.text):
+                value = m.group(1)
+                if value in seen:
+                    continue
+                seen.add(value)
+                conf = 0.9
+                line_no = doc.text.count("\n", 0, m.start())
+                window = "\n".join(lines[max(0, line_no - 3) : line_no + 4])
+                if self._TAXID.search(window):  # 税号邻位 → 可信度提升
+                    conf = min(1.0, conf + 0.2)
+                out.append(Candidate(value=value, field=field, confidence=conf, source="rule", span=(m.start(1), m.end(1))))
+        return out
+
+
 register_extractor("party_a", PartyAExtractor())
 register_extractor("person", PersonExtractor())
 register_extractor("item", ItemExtractor())
 register_extractor("department", DepartmentExtractor())
 register_extractor("topic", TopicExtractor())
+register_extractor("invoice_title", InvoiceTitleExtractor())
