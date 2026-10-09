@@ -34,9 +34,9 @@ _HONORIFICS = sorted(
 
 _TOPIC_SUFFIXES = sorted(
     [
-        "会议纪要", "会议记录", "纪要", "记录", "决议", "通知", "通报",
-        "报告", "总结", "请示", "批复", "函", "备忘录", "协议", "合同",
-        "说明书", "清单", "明细", "附录", "附件",
+        "会议纪要", "会议记录", "会议总结", "工作总结", "纪要", "记录",
+        "决议", "通知", "通报", "报告", "总结", "请示", "批复",
+        "备忘录", "协议", "合同", "说明书", "清单", "明细", "附录", "附件", "函",
     ],
     key=len,
     reverse=True,
@@ -48,11 +48,13 @@ _SPEC_TAIL = re.compile(r"\s+(?:\d|寸|英寸|[A-Za-z]).*$")
 
 def normalize_org(value: str) -> str:
     v = value.strip()
-    if _BRANCH.search(v):  # "…公司上海分公司" → 截到最后一个"公司"（不再走后缀循环，避免把本体裁掉）
-        idx = v.rfind("公司")
+    m = _BRANCH.search(v)
+    if m:  # "…公司上海分公司" → 截到最后一个"公司"（不再走后缀循环，避免把本体裁掉）
+        head = v[: m.start()]  # 去掉"分公司"本身，防止 rfind 命中其内部的"公司"
+        idx = head.rfind("公司")
         if idx >= 0:
             return v[: idx + 2]
-        cut = _BRANCH.sub("", v)
+        cut = head.strip()
         return cut if cut else value
     changed = True
     while changed:
@@ -92,13 +94,19 @@ def normalize_item(value: str) -> str:
 
 
 def normalize_topic(value: str) -> str:
-    """标题 → 议题：循环裁尾部公文后缀，保留至少 4 字。"""
+    """标题 → 议题：循环裁尾部公文后缀。
+
+    短标题（<6 字）不裁，避免 "年度总结" → "年度"；长标题允许裁到 2 字
+    （"季度工作总结报告" → "季度"，依赖 工作总结/报告 逐级剥离）。
+    """
     v = value.strip()
+    if len(v) < 6:
+        return v
     changed = True
     while changed:
         changed = False
         for s in _TOPIC_SUFFIXES:
-            if v.endswith(s) and len(v) - len(s) >= 4:
+            if v.endswith(s) and len(v) - len(s) >= 2:
                 v = v[: -len(s)]
                 changed = True
                 break
