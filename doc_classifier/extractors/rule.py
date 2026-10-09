@@ -177,10 +177,15 @@ class DepartmentExtractor:
 
         for m in self._SUFFIX.finditer(doc.text):
             v = m.group(1)
-            valid = any(w in v for w in _DEPARTMENTS) or v.endswith(self._HONORIFICS)
-            if not valid:
+            s, e = m.start(1), m.end(1)
+            # 词表项在命中串内部 → 从词表项起点裁剪前缀（"请财务部" → "财务部"）
+            cuts = [i for w in _DEPARTMENTS if (i := v.find(w)) >= 0]
+            if cuts:
+                cut = min(cuts)
+                v, s, e = v[cut:], s + cut, e
+            if not any(w in v for w in _DEPARTMENTS) and not v.endswith(self._HONORIFICS):
                 continue  # 防"部分/部门感"类误报
-            add(v, 0.7, (m.start(1), m.end(1)))
+            add(v, 0.7, (s, e))
 
         # 包含关系去重："财务部" ⊂ "请财务部" → 丢弃长串（同置信度下短者为真名概率更高）
         values = list(best)
