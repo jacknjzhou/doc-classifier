@@ -27,7 +27,7 @@ def test_no_section_uses_first_section(rules):
     doc = RecognizedDoc(
         doc_id="r1",
         sections=[
-            Section(title=None, text="差旅费报销申请 姓名：张三"),
+            Section(title=None, text="差旅费报销申请 报销人：张三"),  # 命中 报销+报销人 = 2 ≥ min_score
             Section(title="增值税电子发票", text="项目名称：*信息技术服务* 税额 合同"),
         ],
     )
