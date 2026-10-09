@@ -225,8 +225,13 @@ class TopicExtractor:
             else self._DEFAULT_LABELS
         )
         for label in labels:
-            for m in re.finditer(re.escape(label) + r"[：:]\s*([^\s。；;]{2,30})", doc.text):
-                add(m.group(1), 0.9, (m.start(1), m.end(1)))
+            for m in re.finditer(re.escape(label) + r"[：:]\s*([^。；;\n]{2,40})", doc.text):
+                segs = m.group(1).split()
+                cut = [i for i, s in enumerate(segs) if ("：" in s) or (":" in s)]
+                if cut:
+                    segs = segs[: min(cut)]  # 下一个字段标签 → 截止
+                if segs:
+                    add(" ".join(segs), 0.9, (m.start(1), m.start(1) + len(m.group(1))))
 
         for m in self._ABOUT.finditer(doc.text):
             add(m.group(1), 0.7, (m.start(1), m.end(1)))

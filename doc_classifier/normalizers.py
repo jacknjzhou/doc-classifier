@@ -118,6 +118,7 @@ def normalize_topic(value: str) -> str:
                 v = v[: -len(s)]
                 changed = True
                 break
+    v = re.sub(r"[的了]{1,2}$", "", v)  # 去残留虚词（"…评审的" → "…评审"）
     return v or value
 
 
